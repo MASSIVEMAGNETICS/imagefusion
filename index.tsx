@@ -1,17 +1,14 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { useCustomImageGenerator } from './hooks/useCustomImageGenerator';
 
 const App = () => {
     const [image1, setImage1] = useState<string | null>(null);
     const [image2, setImage2] = useState<string | null>(null);
     const [blendMode, setBlendMode] = useState<string>('');
     const [prompt, setPrompt] = useState<string>('');
-    const [loading, setLoading] = useState<boolean>(false);
-    const [error, setError] = useState<string | null>(null);
-    const [generatedImage, setGeneratedImage] = useState<string | null>(null);
 
-    const ai = useMemo(() => new GoogleGenAI({ apiKey: process.env.API_KEY }), []);
+    const { generatedImage, loading, error, generate } = useCustomImageGenerator();
 
     const BLEND_MODES = ['Fuse', 'Sample', 'Reffer', 'Smash', 'Mash'];
 
@@ -26,57 +23,9 @@ const App = () => {
         }
     };
 
-    const handleGenerate = async () => {
-        if (!image1 || !image2 || !blendMode) {
-            setError('Please upload two images and select a blend mode.');
-            return;
-        }
-
-        setLoading(true);
-        setError(null);
-        setGeneratedImage(null);
-
-        try {
-            // Step 1: Use multimodal model to generate a descriptive prompt
-            const visionPrompt = `You are an expert art director. Your task is to create a detailed, vivid, and descriptive prompt for an AI image generator. The prompt should combine the elements of the two provided images in a style described as '${blendMode}'. Also incorporate the user's guidance: '${prompt || 'Create a visually stunning masterpiece.'}'. Generate only the descriptive prompt for the image generator and nothing else. Be creative and concise.`;
-            
-            const imagePart1 = { inlineData: { mimeType: image1.split(';')[0].split(':')[1], data: image1.split(',')[1] } };
-            const imagePart2 = { inlineData: { mimeType: image2.split(';')[0].split(':')[1], data: image2.split(',')[1] } };
-
-            const visionResponse: GenerateContentResponse = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: { parts: [{ text: visionPrompt }, imagePart1, imagePart2] },
-            });
-            
-            const descriptivePrompt = visionResponse.text;
-            if (!descriptivePrompt) {
-                throw new Error('Could not generate a descriptive prompt.');
-            }
-
-            // Step 2: Use the generated prompt to create an image
-            const imageResponse = await ai.models.generateImages({
-                model: 'imagen-3.0-generate-002',
-                prompt: descriptivePrompt,
-                config: {
-                    numberOfImages: 1,
-                    outputMimeType: 'image/jpeg',
-                    aspectRatio: '1:1',
-                },
-            });
-            
-            const base64ImageBytes = imageResponse.generatedImages[0]?.image?.imageBytes;
-
-            if (base64ImageBytes) {
-                setGeneratedImage(`data:image/jpeg;base64,${base64ImageBytes}`);
-            } else {
-                throw new Error('Image generation failed. The response did not contain image data.');
-            }
-
-        } catch (err) {
-            console.error(err);
-            setError(err instanceof Error ? err.message : 'An unknown error occurred during image generation.');
-        } finally {
-            setLoading(false);
+    const handleGenerate = () => {
+        if (image1 && image2 && blendMode) {
+            generate(image1, image2, blendMode, prompt);
         }
     };
     
